@@ -8,7 +8,7 @@
  */
 
 module.exports = {
-  roles: ["harvester", "upgrader", "builder"],
+  roles: ["harvester", "upgrader", "builder", "carry"],
   roleFilter: function(role){
       return  _.filter(Game.creeps, (creep) =>{
           creep.memory.role === role;
@@ -53,27 +53,6 @@ module.exports = {
   getMinOfProperyValue: function(numArray) {
     return Math.max.apply(null, numArray);
   },
-  balanceSource: function() {
-  	var obj = {};
-  	_.forEach(Game.creeps, (creep)=>{            
-      if(!obj[creep.memory.source]){
-      	obj[creep.memory.source] = 1;
-      }else{
-      	obj[creep.memory.source] += 1;
-      }
-  	});
-    var result = this.getStatOfProperyValue(obj);
-    console.log("source",result.maxSource,":",result.maxNum, "source", result.minSource,":",result.minNum);
-
-    if(result.minNum !== result.maxNum && result.maxNum -1 !== result.minNum){
-      //待优化
-      var theOne = _.find(Game.creeps, (creep)=>{
-        return creep.memory.source == result.maxSource;
-      });
-      console.log(theOne.name,"is changing source to source",result.minSource);
-      theOne.memory.source = result.minSource;
-    }
-   },
    getConstructionSitesIds: function(room){
      var arr = [];
      var targets = room.find(FIND_CONSTRUCTION_SITES);
@@ -86,12 +65,19 @@ module.exports = {
    },
    getSoucesIds: function(room){
    	var arr = [];
+   	var mapping = [];
    	var sources = room.find(FIND_SOURCES);
-   	for(var name in sources){
-   		if(sources[name]){
-   			arr.push(sources[name].id);
-   		}
+   	if(!Memory.someData.harvestMapping){
+   		Memory.someData.harvestMapping = [];
    	}
+
+	for(var name in sources){
+	    if(sources[name]){
+	   		arr.push(sources[name].id);
+	   		mapping.push({roomName: room.name, sourceId: sources[name].id, creepId: null});
+	   	}
+	}
+	Memory.someData.harvestMapping = mapping;
    	return arr;
    },
    getSpecialIds: function(room, findResources, option){
@@ -114,5 +100,110 @@ module.exports = {
 	     return arr;
      }
      
+   },
+   getAnArrayfrom0: function(length){
+     var arr = [];
+     for(let i=0; i< length; i++){
+     	arr.push(i);
+     }
+     return arr;
+   },
+   getRoleStats: function(room){
+     let result = {};
+     _.forEach(Game.creeps, (creep)=>{
+      if(creep.room === room){
+        if(!result[creep.memory.role]){
+          result[creep.memory.role] = 1;
+        }else{
+          result[creep.memory.role] += 1;
+        }
+      }
+     });
+     if(!Memory.rooms[room.name]){
+      Memory.rooms[room.name] = {};
+     }
+     Memory.rooms[room.name].roleStats = result;
+     return result;
+   },
+   createHelper: function(bodayArr, option, spawn, callback){
+     let newName;
+     let role = option.role?option.role: "unknown";
+     // console.log(bodayArr, Game.spawns[spawn].canCreateCreep(bodayArr));
+     if(spawn){
+      if(Game.spawns[spawn].canCreateCreep(bodayArr) === OK){
+        newName = Game.spawns[spawn].createCreep(bodayArr, option);
+        if(callback){
+          let gg = callback(newName, Game.spawns[spawn].room.name);
+          console.log(gg);
+        }
+        console.log(callback);
+      }
+
+     }else{
+      if(Game.spawns['UBL'].canCreateCreep(bodayArr) === OK){
+        newName =  Game.spawns['UBL'].createCreep(bodayArr, option);
+        if(callback){
+          callback(newName, Game.spawns[spawn].room.name);
+        }
+      }
+     }
+     if(newName && spawn){
+       console.log(spawn,' spawning new '+role +' : ' + newName);
+     }else if(newName){
+      console.log('Spawning new '+role +' : ' + newName);
+     }
+     return newName;
+   },
+  findOutTheDirection: (flagName)=>{
+    let arr = flagName.split("_");
+    let roomName = arr[0];
+    let direction = arr[1];
+    switch(direction){
+      case "TOP": dicrection = TOP;
+        break;
+      case "BOTTOM": dicrection = BOTTOM;
+       break;
+      case "LEFT": dicrection = LEFT;
+        break;
+      case "RIGHT": dicrection = RIGHT;
+        break;
+    }
+    return {
+      roomName: roomName,
+      direction: eval(direction)
+    };
+  },
+   detemineSource: function(newName, roomName){
+    if(typeof newName === "string"){
+          var result = _.find(Game.creeps, (creep)=>{
+            return creep.room.name === roomName && creep.memory.role === "staticHarvester" && creep.memory.source === 0;
+          });
+          if(result){
+            Game.creeps[newName].memory.source = 1;
+          }else{
+            Game.creeps[newName].memory.source = 0;
+          }
+          console.log("the source is "+ Game.creeps[newName].memory.source);
+          return Game.creeps[newName].memory.source;
+      }
+   },
+   createWorkBodyArr: (num)=>{
+     let unit = [WORK, MOVE, CARRY];
+     let result = [];
+     for(let i=0; i< num; i++){
+       result = [...result, ...unit];
+     }
+     return result;
+   },
+   getTargetsByIds: (ids)=>{
+     let result = [];
+     if(ids){
+      for(let name in ids){
+        if(Game.getObjectById(ids[name])){
+          result.push(Game.getObjectById((ids[name])));
+        }
+      }
+     }
+     return result;
    }
 };

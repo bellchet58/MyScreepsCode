@@ -6,7 +6,7 @@
  * var mod = require('role.builder');
  * mod.thing == 'a thing'; // true
  */
-var roleHarvester = require('role.harvester');
+
 var someUtil = require('some.util');
 
 var roleBuilder = {
@@ -24,32 +24,55 @@ var roleBuilder = {
 	    }
 
 	    if(creep.memory.building) {
-	    	var targetIds;
-	    	targetIds = Game.rooms["E64N7"].stats().construction_sites_ids;
-            if(targetIds.length) {
-                if(creep.build(Game.getObjectById(targetIds[0])) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(Game.getObjectById(targetIds[0]));
-                }
-            }else if(Game.rooms["E64N7"].stats().structures_need_repair_ids.length > 0){
-            	targetIds = Game.rooms["E64N7"].stats().structures_need_repair_ids;
-            	if(creep.repair(Game.getObjectById(targetIds[0])) === ERR_NOT_IN_RANGE){
-            		creep.moveTo(Game.getObjectById(targetIds[0]));
-            	}
-            }
-            else{
-            	creep.memory.temp = true;
-            	creep.memory.harvesting = true;
-                roleHarvester.run(creep);
-            }
+	    	if(creep.memory.targetRoom && creep.room.name !== creep.memory.targetRoom){
+	    		for(let name in Game.flags){
+			    	if(Game.flags[name].color === COLOR_WHITE && Game.flags[name].secondaryColor === COLOR_WHITE && creep.room === Game.flags[name].room){
+			    	    if(!(creep.pos.x === Game.flags[name].pos.x && creep.pos.y === Game.flags[name].pos.y)){
+							creep.moveTo(Game.flags[name], {reusePath: 10});
+						}else{
+							creep.move(someUtil.findOutTheDirection(Game.flags[name].name).direction);
+						}
+			    	}
+	    		}
+	    	}else{
+		    		let targets = someUtil.getTargetsByIds(Memory.rooms[creep.room.name].construction_sites_ids);
+		    		if(creep.build(targets[0]) === ERR_NOT_IN_RANGE){
+		    			creep.moveTo(targets[0] , {reusePath: 10});
+		    		}else if(creep.build(targets[0]) === ERR_INVALID_TARGET){
+		    			console.log(creep.name, "encounter some problem while building at",creep.pos.x,",", creep.pos.y," in ",creep.room.name, "the targetRoom is ");
+		    		}
+	    	}
+	    	
+	    	
 	    }
 	    else {
-	        var sourcesIds = Game.rooms["E64N7"].stats().sources_ids;
-             if(creep.harvest(Game.getObjectById(sourcesIds[creep.memory.source])) === ERR_NOT_IN_RANGE){
-                 creep.moveTo(Game.getObjectById(sourcesIds[creep.memory.source]));
-             }
-
+	    	var targets = Memory.rooms[creep.room.name].construction_sites_ids;
+	    	if(targets){
+	    		this.doHarvesting(creep);
+	    	}
 	    }
-	}
+	},
+	doHarvesting: function(creep){
+        if(!creep.room.stats().roleStats["staticHarvester"]){
+            var sourcesIds = creep.room.stats().sources_ids;
+            if(creep.harvest(Game.getObjectById(sourcesIds[creep.memory.source])) === ERR_NOT_IN_RANGE){
+                creep.moveTo(Game.getObjectById(sourcesIds[creep.memory.source]), {reusePath: 10});
+            }
+
+        }else{
+            this.withdrawFromSource(creep);
+        }
+    },
+    withdrawFromSource: (creep)=>{
+        var target = creep.room.storage;
+        if(!target){
+        	let targets = Memory.rooms[creep.room.name].container_ids;
+		  	target = creep.pos.findClosestByRange(targets);
+        }
+        if(creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE){
+            creep.moveTo(target, {reusePath: 10});
+        } 
+    }
 };
 
 module.exports = roleBuilder;
